@@ -309,5 +309,8 @@ def get_transformed_df():
         columns= processed_feat,
         index = X_train.index
     )
+    
+    # add target variable back to the processed dataframe
+    df_processed = pd.concat([df_processed, y_train], axis=1)
 
     return df_processed
