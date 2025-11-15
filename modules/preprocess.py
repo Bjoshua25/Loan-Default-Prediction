@@ -40,6 +40,87 @@ if str(parent_dir) not in sys.path:
 
 
 
+# ----------------------- DEFINE FEATURE LISTS -----------------------
+# Log Transform Columns
+log_transform_cols = [
+    'loan_amount',
+    'property_value',
+    'income',
+    'Upfront_charges'
+]
+
+# Numerical columns for imputation and scaling
+numerical_cols = [
+    'rate_of_interest',
+    'Interest_rate_spread',
+    'term',
+    'Credit_Score',
+    'LTV',
+    'dtir1',
+    'age_numerical'
+]
+
+
+# Categorical columns for imputation and One-Hot Encoding
+categorical_cols = [
+    'loan_limit',
+    'Gender',
+    'approv_in_adv',
+    'loan_type',
+    'loan_purpose',
+    'Credit_Worthiness',
+    'open_credit',
+    'business_or_commercial',
+    'Neg_ammortization',
+    'interest_only',
+    'lump_sum_payment',
+    'construction_type',
+    'occupancy_type',
+    'Secured_by',
+    'total_units',
+    'credit_type',
+    'co-applicant_credit_type',
+    'submission_of_application',
+    'Region',
+    'Security_Type'
+]
+
+
+
+
+# ----------------- LOAD AND SPLIT DATA --------------------------
+def load_and_split_data(filepath= dataset_dir):
+
+    """
+    About: 
+        Function to load DataFrame from filepath, then splits dataset into train and test sets using 80/20 split rule.
+    Input:
+        filepath (str): Absolute file path
+    Output:
+        X_train (pd.DataFrame) 
+        X_test (pd.DataFrame) 
+        y_train (pd.Series)
+        y_test (pd.Series)
+    """
+
+    # create dataframe 
+    df = pd.read_csv(filepath)
+
+    # Prediction Matrix
+    X = df.drop(columns= "Status")
+
+    # Target vector
+    y = df["Status"]
+
+    # train_test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+    return X_train, X_test, y_train, y_test
+
+
+
+
 
 
 
@@ -93,7 +174,7 @@ def clean_data(df):
 
 # ------------------ PREPROCESSING PIPELINE ------------------------
 
-def preprocessing_pipeline(df):
+def preprocessing_pipeline():
     """
     About:
         Function to create preprocessing pipeline for numerical and categorical features.
@@ -102,51 +183,6 @@ def preprocessing_pipeline(df):
     Output:
         Preprocessing Pipeline
     """
-
-    # ------- DEFINE FEATURE LISTS -------
-    # Log Transform Columns
-    log_transform_cols = [
-        'loan_amount',
-        'property_value',
-        'income',
-        'Upfront_charges'
-    ]
-
-    # Numerical columns for imputation and scaling
-    numerical_cols = [
-        'rate_of_interest',
-        'Interest_rate_spread',
-        'term',
-        'Credit_Score',
-        'LTV',
-        'dtir1',
-        'age_numerical'
-    ]
-
-
-    # Categorical columns for imputation and One-Hot Encoding
-    categorical_cols = [
-        'loan_limit',
-        'Gender',
-        'approv_in_adv',
-        'loan_type',
-        'loan_purpose',
-        'Credit_Worthiness',
-        'open_credit',
-        'business_or_commercial',
-        'Neg_ammortization',
-        'interest_only',
-        'lump_sum_payment',
-        'construction_type',
-        'occupancy_type',
-        'Secured_by',
-        'total_units',
-        'credit_type',
-        'co-applicant_credit_type',
-        'submission_of_application',
-        'Region',
-        'Security_Type'
-    ]
 
     # ------- LOG TRANSFROMATION -----
     log_pipeline = Pipeline(
@@ -173,15 +209,6 @@ def preprocessing_pipeline(df):
         ]
     )
 
-    # ------ COMBINE ALL PIPELINES USING COLUMN TRANSFORMER ------
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('log_num', log_pipeline, log_transform_cols),
-            ('num', num_pipeline, numerical_cols),
-            ('cat', cat_pipeline, categorical_cols)
-        ],
-        remainder= "drop"
-    )
 
     # ------ COMBINE ALL PIPELINES USING COLUMN TRANSFORMER ------
     preprocessor = ColumnTransformer(
@@ -204,3 +231,83 @@ def preprocessing_pipeline(df):
     return full_pipeline
 
 
+
+
+
+
+# --------------------------- TRANSFORM DATASET -----------------------------
+def transform_data():
+
+    """
+    About: 
+        A function that load, split, apply transformation pipeline on dataset
+    Input:
+        No Args
+    Output:
+        X_train_trans (numpy.ndarray): transformed X_train 
+        X_test_trans (numpy.ndarray): transformed X_test
+        pipeline (Pipeline): the preprocessing pipeline used for transformation
+    """
+
+    # Load and Split data into train and test set
+    X_train, X_test, y_train, y_test = load_and_split_data(filepath= dataset_dir)
+
+    # build pipeline
+    pipeline = preprocessing_pipeline()
+
+    # fit and transform Train set
+    X_train_trans = pipeline.fit_transform(X_train)
+
+    # Transform the test set
+    X_test_trans = pipeline.transform(X_test) 
+
+    return X_train_trans, X_test_trans, pipeline
+
+
+
+
+
+
+
+# ---------------------------- PREPROCESSED DATAFRAME -----------------------------
+def get_transformed_df():
+
+    """
+    About: 
+        A function that load and splits dataset, build full pipeline, transform the splited data,
+        then creating a tranformed dataframe using the feature names in the pipeline and the
+        transformed value.
+    Input: 
+        No Args
+    Output:
+        Transformed dataframe (pd.DataFrame)
+    """
+
+    # Load and Split Dataset
+    X_train, X_test, y_train, y_test = load_and_split_data(filepath= dataset_dir)
+
+
+    # transformed feature matrices
+    X_train_trans, X_test_trans, pipeline = transform_data()
+
+    # Access the OneHotEncoder transformer
+    onehot_transformer =  pipeline["preprocessor"].named_transformers_["cat"]["onehot"]
+
+    # extract feature names from onehot transformer
+    cat_cols = list(onehot_transformer.get_feature_names_out(categorical_cols))
+
+    # processed features
+    processed_feat = (
+        log_transform_cols +
+        numerical_cols +
+        cat_cols
+    )
+
+    # dataframe of processed data
+    df_processed = pd.DataFrame(
+        X_train_trans,
+        columns= processed_feat,
+        index = X_train.index
+    )
+
+    return df_processed
