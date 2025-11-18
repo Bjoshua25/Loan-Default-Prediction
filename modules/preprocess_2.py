@@ -40,40 +40,20 @@ if str(parent_dir) not in sys.path:
 
 
 
-# ----------------------- IMPORT FUNCTIONS FROM SCRIPT ---------------------
-from preprocess import load_and_split_data
-from preprocess import transform_data
-from preprocess import get_transformed_df
-
-
-
-
-# ------------------ UPDATED DATA CLEANING FUNCTION ------------------------
-def clean_data(df):
-
-    return df
-
-
-
-
 # ----------------------- DEFINE FEATURE LISTS -----------------------
 # Log Transform Columns
 log_transform_cols = [
     'loan_amount',
-    'property_value',
     'income',
-    'Upfront_charges'
+    'Upfront_charges',
+    'Interest_rate_spread',
+    'dtir1'
 ]
 
 # Numerical columns for imputation and scaling
 numerical_cols = [
-    'rate_of_interest',
-    'Interest_rate_spread',
-    'term',
-    'Credit_Score',
     'LTV',
-    'dtir1',
-    'age_numerical'
+    'age_numerical' 
 ]
 
 
@@ -86,7 +66,6 @@ categorical_cols = [
     'loan_purpose',
     'Credit_Worthiness',
     'open_credit',
-    'business_or_commercial',
     'Neg_ammortization',
     'interest_only',
     'lump_sum_payment',
@@ -98,8 +77,113 @@ categorical_cols = [
     'co-applicant_credit_type',
     'submission_of_application',
     'Region',
-    'Security_Type'
+    'Security_Type',
+    'term', 
+    'Credit_Score_Group' 
 ]
+
+
+
+
+# ----------------- LOAD AND SPLIT DATA --------------------------
+def load_and_split_data(filepath= dataset_dir):
+
+    """
+    About: 
+        Function to load DataFrame from filepath, then splits dataset into train and test sets using 80/20 split rule.
+    Input:
+        filepath (str): Absolute file path
+    Output:
+        X_train (pd.DataFrame) 
+        X_test (pd.DataFrame) 
+        y_train (pd.Series)
+        y_test (pd.Series)
+    """
+
+    # create dataframe 
+    df = pd.read_csv(filepath)
+
+    # Prediction Matrix
+    X = df.drop(columns= "Status")
+
+    # Target vector
+    y = df["Status"]
+
+    # train_test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+    return X_train, X_test, y_train, y_test
+
+
+
+
+# ------------------ UPDATED DATA CLEANING FUNCTION ------------------------
+def clean_data(df):
+    """
+    About:
+        Function to clean the data and perform feature engineering.
+    Input:
+        DataFrame: 
+    Output:
+        Cleaned DataFrame
+    """
+
+    # ------- DROPPING NON-PREDICTIVE COLUMNS -------
+    # create a copy of the dataframe
+    df = df.copy()
+
+    # drop non-predictive columns
+    df = df.drop(columns = ["ID", "year"], errors='ignore')
+
+    # Drop collinear numerical features based on EDA
+    df = df.drop(columns = ["property_value", "rate_of_interest"], errors='ignore')
+
+    # Drop redundant categorical feature based on EDA
+    df = df.drop(columns = ["business_or_commercial"], errors='ignore')
+
+
+    # ---- FUNCTION CONVERTING AGE RANGE TO MIDPOINT ----
+    def age_midpoint (age_range):
+        if pd.isna(age_range):
+            return np.nan
+        elif age_range == '<25':
+            return 20.0
+        elif age_range == '>74':
+            return 75.0
+        elif '-' in age_range:
+            lower, upper = map(int, age_range.split('-'))
+            return (lower + upper) / 2
+        return np.nan
+    
+    # Apply age conversion and drop the original 'age' column
+    df['age_numerical'] = df['age'].apply(age_midpoint)
+    df = df.drop(columns=['age'], errors='ignore')
+
+    # Outlier capping for LTV (Loan-to-Value)
+    LTV_CAP = 150.0
+    df['LTV'] = np.where(df['LTV'] > LTV_CAP, LTV_CAP, df['LTV'])
+
+
+    # ---------- CREDIT SCORE BINNING -------
+    # Convert the continuous Credit_Score to ordinal categories
+    bins = [0, 580, 670, 740, 800, 1000] 
+    labels = ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
+
+    # create categorical feature and drop the original numerical score
+    df["Credit_Score_Group"] = pd.cut(
+        df["Credit_Score"],
+        bins=bins,
+        labels=labels,
+        right=False,
+        include_lowest=True,
+    ).astype('object')
+    df = df.drop(columns=['Credit_Score'], errors='ignore') 
+
+    # Convert TERM to categorical variable to handle extreme skewness
+    df['term'] = df['term'].astype(object)
+
+    return df
 
 
 
@@ -108,16 +192,57 @@ categorical_cols = [
 # -------------- UPDATED PREPROCESSING PIPELINE -----------------
 
 def get_preprocessing_pipeline():
+    """
+    About:
+        Function to create preprocessing pipeline for numerical and categorical features.
+    Input:
+        DataFrame
+    Output:
+        Preprocessing Pipeline
+    """
 
     # Log pipeline
+    log_pipeline = Pipeline(
+        steps= [
+            ('imputer', SimpleImputer(strategy='median')), 
+            ('log_transform', FunctionTransformer(np.log1p, validate=False)), 
+            ('scalar', StandardScaler())
+        ]
+    )
 
     # Numerical pipeline
+    num_pipeline = Pipeline(
+        steps = [
+            ('imputer', SimpleImputer(strategy = 'median')),
+            ('scalar', StandardScaler())
+        ]
+    )
 
     # Categorical pipeline
+    cat_pipeline = Pipeline(
+        steps = [
+            ('imputer', SimpleImputer(strategy='most_frequent')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False, drop='first'))
+        ]
+    )
 
     # Combine All Pipeline using ColumnTransformer
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('log_num', log_pipeline, log_transform_cols),
+            ('num', num_pipeline, numerical_cols),
+            ('cat', cat_pipeline, categorical_cols)
+        ],
+        remainder= "drop"
+    )
 
     # Full Transformation Pipeline
+    full_pipeline = Pipeline(
+        steps = [
+            ('data_cleaning', FunctionTransformer(clean_data, validate=False)),
+            ('preprocessor', preprocessor)
+        ]
+    )
 
     return full_pipeline
 
@@ -140,7 +265,7 @@ def transform_data():
     """
 
     # Load and Split data into train and test set
-    X_train, X_test, y_train, y_test = train_test_split(filepath = dataset_dir)
+    X_train, X_test, y_train, y_test = load_and_split_data(filepath=dataset_dir)
 
     # build pipeline
     pipeline = get_preprocessing_pipeline()
