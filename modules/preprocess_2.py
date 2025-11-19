@@ -110,7 +110,7 @@ def load_and_split_data(filepath= dataset_dir):
     y = df["Status"]
 
     # train_test split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
 
     return X_train, X_test, y_train, y_test
@@ -231,16 +231,17 @@ def get_preprocessing_pipeline():
         transformers=[
             ('log_num', log_pipeline, log_transform_cols),
             ('num', num_pipeline, numerical_cols),
-            ('cat', cat_pipeline, categorical_cols)
+            ('cat', cat_pipeline, categorical_cols),
         ],
-        remainder= "drop"
+        remainder= 'drop'
     )
 
     # Full Transformation Pipeline
     full_pipeline = Pipeline(
         steps = [
             ('data_cleaning', FunctionTransformer(clean_data, validate=False)),
-            ('preprocessor', preprocessor)
+            ('preprocessor', preprocessor),
+            ('final_imputer', SimpleImputer(strategy='median'))
         ]
     )
 
