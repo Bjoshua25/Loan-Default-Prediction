@@ -353,6 +353,6 @@ if __name__ == "__main__":
     print(processed_df.head())
 
 
-    # list of first 10 column names
+    # list of first 15 column names
     print("\nFirst 15 feature names")
     print(processed_df.columns[:15])
