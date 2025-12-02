@@ -1,0 +1,7 @@
+.myenv/                         # Ignore virtual environment folder
+.env                            # Ignore environment variable file
+__pycache__/                    # Ignore Python cache files
+*.pyc                           # Ignore compiled Python files
+.DS_Store                       # Ignore macOS system files
+.vscode/                        # Ignore VSCode settings folder
+
