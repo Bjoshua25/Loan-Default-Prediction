@@ -30,19 +30,17 @@ warnings.filterwarnings('ignore')
 # --------------------- HANDLING DIRECTORY -------------------------
 
 try:
-    # Use Path(__file__) if the script is run directly
     current_script_dir = Path(__file__).resolve().parent
-    parent_dir = current_script_dir.parent.parent # Assuming model.py is in modules/
+    parent_dir = current_script_dir.parent
     
-    # If the script is run from an interactive environment where __file__ is unavailable,
-    # use a fallback, though the previous directory logic often fails in complex setups.
-    # We will rely on the structure: .../Loan Default Prediction/modules/model.py
 except NameError:
-    parent_dir = Path.cwd().parent.parent
+    parent_dir = Path.cwd().parent
 
 # Set specific directories
 data_dir = parent_dir / "data"
 dataset_dir = data_dir / "Loan_Default.csv"
+image_dir = parent_dir / "image"
+model_dir = parent_dir / "models"
 
 # Ensure the project root is in the system path for correct module imports
 if str(parent_dir) not in sys.path:
@@ -53,7 +51,7 @@ if str(parent_dir) not in sys.path:
 # -------------------- IMPORT PREPROCESSING FUNC -------------------------
 
 try:
-    from preprocess_2 import load_and_split_data, get_preprocessing_pipeline, get_transformed_df
+    from modules.preprocess_2 import load_and_split_data, get_preprocessing_pipeline, get_transformed_df
 except ImportError:
     print("Error: Could not import preprocessing functions. Ensure 'preprocess_2.py' is correctly set up.")
     sys.exit(1)
@@ -160,7 +158,7 @@ def run_logistic_regression(filepath=dataset_dir):
     plt.title('Normalized Confusion Matrix (Test Set)', fontsize=16)
     plt.ylabel('Actual Class', fontsize=12)
     plt.xlabel('Predicted Class', fontsize=12)
-    plt.savefig(parent_dir / 'images' / 'log_reg_confusion.png') # Save to the images folder
+    plt.savefig(parent_dir / 'image' / 'log_reg_confusion.png') # Save to the images folder
     plt.show()
 
     print("\nConfusion Matrix Saved: log_reg_confusion.png")
@@ -209,15 +207,160 @@ def run_logistic_regression(filepath=dataset_dir):
     plt.ylabel('Features')
     plt.grid(axis='x', linestyle='--', alpha=0.6)
     plt.tight_layout()
-    plt.savefig(parent_dir / 'images' / 'top_20_feat_importance.png') # Save to the images folder
+    plt.savefig(parent_dir / 'image' / 'top_20_feat_importance.png') # Save to the images folder
     plt.show()
 
     print("\nFeature Importance Plot Saved: top_20_feat_importance.png")
     print("\n--- Logistic Regression Workflow Complete ---")
     
+
+
+
+
+# --------------------- RANDOM FOREST MODELING FUNCTION ----------------------------
+
+def run_random_forest(filepath=dataset_dir):
+    """
+    Executes the full Random Forest modeling workflow:
+    Loads, preprocesses, trains, tunes (GridSearchCV), and evaluates the best model.
+    """
+    print(f"\n=====================================================================")
+    print(f"--- STARTING: Random Forest Model Training ---")
+    print(f"=====================================================================")
+
+    # --------- LOAD AND SPLIT DATA -------------
+    # Note: We need the full X_train/y_train for fitting the GridSearchCV object
+    X_train, X_test, y_train, y_test = load_and_split_data(filepath)
+
+    # ---------- PREPROCESSING PIPELINE --------------------
+    preprocessing = get_preprocessing_pipeline()
+
+    # ---------------- RANDOM FOREST INSTANTIATE--------------------
+    rf_classifier = RandomForestClassifier(random_state=42, class_weight='balanced')
+
+    rf_pipeline = Pipeline(steps=[
+        ('preprocessor', preprocessing),
+        ('classifier', rf_classifier)
+    ])
+
+    # ------------------- HYPERPARAMETER GRID DEFINITION --------------------
+    param_grid = {
+        'classifier__n_estimators': [100], 
+        'classifier__max_depth': [5, 10, 15], 
+        'classifier__min_samples_split': [5, 10], 
+        'classifier__min_samples_leaf': [3, 5]
+    }
+
+    # ---------- GRID SEARCH --------
+    grid_search = GridSearchCV(
+        rf_pipeline, 
+        param_grid, 
+        cv=3, 
+        scoring='roc_auc', 
+        n_jobs=-1,
+        verbose=1
+    )
+
+    print("Starting Grid Search for Random Forest...")
+    grid_search.fit(X_train, y_train)
+    print("Grid Search Complete.")
+
+    best_rf_pipeline = grid_search.best_estimator_
+    print(f"\nBest parameters found: {grid_search.best_params_}")
+    print(f"Best CV ROC AUC score: {grid_search.best_score_:.4f}")
+
+    # --------- SAVE THE BEST MODEL ---------
+    model_save_path = model_dir / 'best_rf_pipeline.pkl'
+    joblib.dump(best_rf_pipeline, model_save_path)
+    print(f"\nBest Random Forest Model Saved to: {model_save_path}")
+
+    # -------- EVALUATION ON TEST SET (Most Robust Evaluation) ------------
+
+    # Predict probabilities on the held-out test set
+    y_pred_proba_test = best_rf_pipeline.predict_proba(X_test)[:, 1]
+
+    # Predict classes on the test set
+    y_pred_test = best_rf_pipeline.predict(X_test)
+
+    # Final test set evaluation
+    final_auc = roc_auc_score(y_test, y_pred_proba_test)
+    print(f"\nFinal Model (Random Forest) AUC Score on Test Set: {final_auc:.4f}")
+    
+    print("\n--- Final Classification Report on Test Set (RF) ---")
+    print(classification_report(y_test, y_pred_test, digits=4))
+
+    # ------------- VISUALIZATION: Confusion Matrix (Test Set) ------------
+    cm_tuned = confusion_matrix(y_test, y_pred_test, normalize='true')
+
+    class_labels = ['0 (No Default)', '1 (Default)']
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        cm_tuned, 
+        annot=True, 
+        fmt=".2%", 
+        cmap='Greens', 
+        xticklabels=class_labels, 
+        yticklabels=class_labels,
+        cbar=False,
+        linewidths=0.5,
+        linecolor='black'
+    )
+
+    plt.title('Normalized Confusion Matrix: Random Forest (Test Set)', fontsize=14)
+    plt.ylabel('Actual Class', fontsize=12)
+    plt.xlabel('Predicted Class', fontsize=12)
+    plt.tight_layout()
+    plt.savefig(image_dir / 'rf_confusion.png')
+    # plt.show()
+    
+    print(f"Confusion Matrix Saved: {image_dir / 'rf_confusion.png'}")
+    
+    # --------- FEATURE IMPORTANCE ANALYSIS & VISUALIZATION ---------
+    
+    # 1. Get the list of feature names using the helper function
+    df_processed_train = get_transformed_df()
+    feature_names = df_processed_train.drop(columns = 'Status').columns
+    
+    # 2. Get the feature importances from the fitted Random Forest classifier
+    important_feat = best_rf_pipeline.named_steps['classifier'].feature_importances_
+
+    # 3. Create a DataFrame for visualization
+    df_imp = pd.DataFrame({
+        'Feature': feature_names,
+        'Importance': important_feat
+    }).sort_values(by='Importance', ascending=True)
+
+    # 4. Plotting feature importance (Top 20)
+    top_n = 20
+    df_plot = df_imp.tail(top_n)
+
+    plt.figure(figsize=(10, 10))
+    df_plot.plot(
+        kind='barh', 
+        x='Feature', 
+        y='Importance', 
+        figsize=(10, 10), 
+        legend=False,
+        color='darkblue'
+    )
+    plt.title(f'Top {top_n} Feature Importances from Tuned Random Forest', fontsize=14)
+    plt.xlabel('Feature Importance (Gini)')
+    plt.ylabel('Features')
+    plt.grid(axis='x', linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(image_dir / 'rf_top_20_feat_importance.png')
+    # plt.show()
+    
+    print(f"Feature Importance Plot Saved: {image_dir / 'rf_top_20_feat_importance.png'}")
+    print("\n--- Random Forest Workflow Complete ---")
+
+
+
+
    
 
 
 # -------- EXECUTE MODELING WORKFLOW ------------
 if __name__ == '__main__':
-    run_logistic_regression()
+    run_random_forest()

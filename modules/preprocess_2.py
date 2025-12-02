@@ -1,11 +1,13 @@
 # ---------------------- IMPORT LIBRARIES --------------------------
 import os 
 import sys 
+import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
@@ -19,12 +21,16 @@ from sklearn.impute import SimpleImputer
 
 
 
+# Handle warnings
+warnings.filterwarnings('ignore')
+
+
 
 
 # --------------------- HANDLING DIRECTORY -------------------------
 
 # parent folder director
-parent_dir = Path.cwd().parent
+parent_dir = Path(__file__).parent.parent
 
 # data directory
 data_dir = parent_dir / "data"
@@ -317,3 +323,36 @@ def get_transformed_df():
     df_processed = pd.concat([df_processed, y_train], axis=1)
 
     return df_processed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    processed_df = get_transformed_df()
+
+    print("\n=======================================================")
+    print("Preprocessed Training DataFrame Successfully Created!")
+    print("=======================================================\n")
+
+    # Display dataframe shape
+    print(f"Shape of Processed DataFrame (Training Set): {processed_df.shape}")
+
+    # Display first 5 rows of the dataframe
+    print("\nHead of the Processed DataFrame:")
+    print(processed_df.head())
+
+
+    # list of first 10 column names
+    print("\nFirst 15 feature names")
+    print(processed_df.columns[:15])

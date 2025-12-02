@@ -24,7 +24,7 @@ from sklearn.impute import SimpleImputer
 # --------------------- HANDLING DIRECTORY -------------------------
 
 # parent folder director
-parent_dir = Path.cwd().parent
+parent_dir = Path(__file__).resolve().parent.parent
 
 # data directory
 data_dir = parent_dir / "data"
@@ -314,3 +314,8 @@ def get_transformed_df():
     df_processed = pd.concat([df_processed, y_train], axis=1)
 
     return df_processed
+
+
+
+if __name__ == "__main__":
+    get_transformed_df()
