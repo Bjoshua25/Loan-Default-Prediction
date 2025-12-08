@@ -1,4 +1,4 @@
-.myenv/                         # Ignore virtual environment folder
+myenv/                         # Ignore virtual environment folder
 .env                            # Ignore environment variable file
 __pycache__/                    # Ignore Python cache files
 *.pyc                           # Ignore compiled Python files

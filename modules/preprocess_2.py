@@ -80,7 +80,7 @@ categorical_cols = [
     'Secured_by',
     'total_units',
     'credit_type',
-    'co-applicant_credit_type',
+    'co_applicant_credit_type',
     'submission_of_application',
     'Region',
     'Security_Type',
@@ -148,6 +148,9 @@ def clean_data(df):
     # Drop redundant categorical feature based on EDA
     df = df.drop(columns = ["business_or_commercial"], errors='ignore')
 
+    # ----------- RENAME COLUMNS ----------------------
+    # Rename 'co-applicant_credit_type' to 'co_applicant_credit_type'
+    df = df.rename(columns={'co-applicant_credit_type': 'co_applicant_credit_type'})
 
     # ---- FUNCTION CONVERTING AGE RANGE TO MIDPOINT ----
     def age_midpoint (age_range):
