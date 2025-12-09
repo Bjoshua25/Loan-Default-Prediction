@@ -72,7 +72,7 @@ def predict_default(input_data: LoanPredictionInput) -> LoanPredictionOutput:
     probability = pipeline.predict_proba(input_df)[:, 1][0]
 
     # Get Binary Prediction
-    prediction = pipeline.predict(input_df[0])
+    prediction = pipeline.predict(input_df)[0]
 
     # Obtin  human-readable result
     is_default = int(prediction)

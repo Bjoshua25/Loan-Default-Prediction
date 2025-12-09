@@ -5,7 +5,7 @@ from typing import Optional
 
 
 # ------------------- INPUT SCHEMA -----------------------------
-def LoanPredictionInput(BaseModel):
+class LoanPredictionInput(BaseModel):
 
     # features that are handled/dropped by the pipeline
     ID:                         Optional[int]= None
@@ -20,7 +20,7 @@ def LoanPredictionInput(BaseModel):
     loan_amount:            int
     income:                 float
     Upfront_charges:        float
-    interest_rate_spread:   Optional[float] = None
+    Interest_rate_spread:   Optional[float] = None
     dtir1:                  Optional[float]= None
     LTV:                    Optional[float] = None
     term:                   int
@@ -50,7 +50,7 @@ def LoanPredictionInput(BaseModel):
 
 
 # ----------------- OUTPUT SCHEMA ----------------------
-def LoanPredictionOutput(BaseModel):
+class LoanPredictionOutput(BaseModel):
     is_default: int
     default_probability: float
     recommendation: str

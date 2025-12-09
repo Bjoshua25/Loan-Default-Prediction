@@ -1,13 +1,12 @@
 # ------------------ IMPORT LIBRARIES --------------------------
 import os
 import sys
+import traceback
 from pathlib import Path
-from fastapi import FastAPI, Header, HTTPException, status, Depends
+from fastapi import FastAPI, Header, HTTPException, status, Depends, Body
 from typing import Annotated
 
-# --- FIX: CORRECTED IMPORTS for the new flattened 'src' structure ---
-# We no longer need src.api.schemas or src.core.prediction.
-# We import directly from the sibling files within the src/ package.
+# import from custom modules
 from schemas import LoanPredictionInput, LoanPredictionOutput
 from prediction import load_pipeline, predict_default, MODEL_VERSION, pipeline
 
@@ -44,10 +43,10 @@ AuthDep = Annotated[bool, Depends(verify_api_key)]
 @app.on_event("startup")
 async def startup_event():
     """Run model loading when the application starts."""
-    print("⏳ Running application startup routines...")
-    # FIX: Must CALL the function using parentheses!
+    print("Running application startup routines...")
+    
     load_pipeline() 
-    print("✅ Startup complete. API is ready to serve traffic.")
+    print("Startup complete. API is ready to serve traffic.")
 
 
 # -------------- ENDPOINTS -----------------------------------
@@ -65,15 +64,14 @@ def health_check():
     }
 
 
+# prediction route
 @app.post(
     "/predict", 
     response_model=LoanPredictionOutput, 
     tags=["Prediction"],
     dependencies=[Depends(verify_api_key)]
 )
-def predict(
-    input_data: LoanPredictionInput
-):
+def predict(input_data: LoanPredictionInput):
     """
     Accepts raw loan features and returns the prediction result and risk assessment.
     """
@@ -87,10 +85,12 @@ def predict(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
             detail=str(e)
         )
+    
     except Exception as e:
         # Catch any unexpected errors during prediction
+        traceback.print_exc()
         print(f"Prediction Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="An unexpected error occurred during prediction processing."
+            detail=f"Prediction failed. Internal Error: {e}"
         )
